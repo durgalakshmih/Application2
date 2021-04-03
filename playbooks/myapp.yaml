@@ -1,0 +1,9 @@
+---
+- hosts: <hostname>
+  become: true
+  roles:
+    - helloapp
+  #tags:
+  #  - docker
+  
+  #tags can be used if you want to install tagged tasks only
