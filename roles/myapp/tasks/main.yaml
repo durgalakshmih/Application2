@@ -1,0 +1,85 @@
+- name: Install pre-requisite packages
+  yum:
+   name: "{{item}}"
+   state: latest
+  loop:
+   - yum-utils
+   - device-mapper-persistent-data
+   - lvm2
+
+- name: Add Docker CE repo
+  get_url:
+   url: https://download.docker.com/linux/centos/docker-ce.repo
+   dest: /etc/yum.repos.d/docker-ce.repo
+
+- name: Install Docker
+  yum: name=docker state=latest
+  
+- name: docker enable and start
+  service: name=docker state=started enabled=yes
+  
+#build docker image from dockerfile
+
+- name: Build Docker image from Dockerfile
+      docker_image:
+        name: helloapp
+        path: . #path to dockerfile
+        state: build
+
+#push the image to mydtr
+- name: Tag and push to registry
+  docker_image:
+     name: helloapp
+     repository: my_dtr_url/helloapp
+     tag: latest
+     push: yes
+ 
+#install minikube
+
+- name: download minikube package
+  get_url: 
+    url: https://storage.googleapis.com/minikube/releases/latest/minikube-latest.x86_64.rpm 
+    dest: /tmp/minikube-latest.x86_64.rpm
+  become: yes
+ 
+ - name: Install minikube .rpm file on all machines
+    yum:
+     name: /tmp/minikube-latest.x86_64.rpm
+     state: present
+     
+ - name: start minikube
+   shell: "minikube start"
+   become: yes
+   
+ - name: kubectl download
+   shell: "minikube kubectl -- get po -A"
+   become: yes
+   
+#deployment
+
+ - name: Apply k8 deployment
+   shell: "kubectl create -f ../../../deployment.yaml"
+   become: yes
+#service 
+ - name: Apply k8 service
+   shell: "kubectl create -f ../../../service.yaml"
+   become: yes
+
+#Add prometheus
+
+- name: Copy promethues yaml file to server
+  template: src=templates/prometheus.yml dest=/etc/prometheus.yml force=yes
+  become: yes
+  tags:
+    - prometheus
+ 
+ - name: Prometheus container
+   become: yes
+   docker_service:
+    command: >
+      --replicas=1
+      --mount type=bind,source=/etc/prometheus.yml,destination=/etc/prometheus/prometheus.yml 
+      --publish published=9090,target=9090,protocol=tcp
+    image: prom/prometheus
+    name: my-prometheus
+  
